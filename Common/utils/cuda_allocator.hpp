@@ -10,7 +10,6 @@ enum class cuda_memory_type {
     host,
     managed
 };
-// cuda ¼æÈİµÄÄÚ´æ·ÖÅäÆ÷
 template<typename T, cuda_memory_type memory_type = cuda_memory_type::managed, std::size_t minimal_size = 1024/* bytes */>
 class cuda_allocator : public std::allocator<T> {
 public:

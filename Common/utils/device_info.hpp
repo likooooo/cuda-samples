@@ -2,12 +2,11 @@
 #include <stdio.h>
 #include <assert.h>
 #include <cuda_runtime.h>
-//#include <helper_functions.h>
+#include <helper_functions.h>
 #include <helper_cuda.h>
-
 #include <memory>
 #include <iostream>
-#include <iomanip> // for std::setw and std::left
+#include <iomanip>
 #include <vector>
 #include <type_traits>
 inline cudaDeviceProp get_device_properties(int deviceId = 0)
