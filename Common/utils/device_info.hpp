@@ -9,6 +9,15 @@
 #include <iomanip>
 #include <vector>
 #include <type_traits>
+
+inline int set_cuda_deivce(int argc, char **argv)
+{
+    int devID;
+    cudaDeviceProp props;
+    // This will pick the best possible CUDA capable device
+    devID = findCudaDevice(argc, (const char **)argv);
+    return devID;
+}
 inline cudaDeviceProp get_device_properties(int deviceId = 0)
 {
     cudaDeviceProp deviceProp;

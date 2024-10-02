@@ -4,15 +4,34 @@
 #include <memory>
 #include <iostream>
 #include <vector>
+#include <type_traits>
+#include <string>
+// 1D
+// pinned -> device   : cudaMemcpyAsync : cudaMemcpyHostToDevice
+// device -> pinned   : cudaMemcpyAsync : cudaMemcpyDeviceToHost //cudaDeviceSynchronize
+// host_pageable -> device : cudaMemcpy : cudaMemcpyHostToDevice
+// device -> host_pageable : cudaMemcpy : cudaMemcpyDeviceToHost 
+// device -> device        : cudaMemcpy : cudaMemcpyDeviceToDevice
+// host -> host            : std::memcpy // cudaDeviceSynchronize
+
+// 2D
+// cudaMallocPitch, cudaMemcpy2D
+// cudaMallocArray, cudaArraySetComponent, cudaCreateChannelDesc, cudaGetArrayChannelDesc
+
+//TODO :
+// 1. event
+// 2. resource
 
 enum class cuda_memory_type {
-    device,
-    host,
-    managed
+    device, 
+    pinned,
+    pageable, 
+    managed,
 };
-template<typename T, cuda_memory_type memory_type = cuda_memory_type::managed, std::size_t minimal_size = 1024/* bytes */>
+template<typename T, cuda_memory_type memory_type = cuda_memory_type::managed>
 class cuda_allocator : public std::allocator<T> {
 public:
+    static_assert(memory_type == cuda_memory_type::pageable || std::is_trivially_copyable_v<T>);
     using base_type = std::allocator<T>;
     typedef T* pointer;
 
@@ -29,57 +48,61 @@ public:
     cuda_allocator& operator=(const cuda_allocator&) = default;
     ~cuda_allocator() _GLIBCXX_NOTHROW { }
     template<typename U> struct rebind {
-        using other = cuda_allocator<U, memory_type, minimal_size>;
+        using other = cuda_allocator<U, memory_type>;
     };
     
     pointer allocate(std::size_t n, const void* = nullptr) {
         std::size_t size = n * sizeof(T);
         void* ptr = nullptr;
-        if (size >= minimal_size)
-        {
-            cudaError_t err = cudaSuccess;
-            if constexpr (memory_type == cuda_memory_type::device) {
-                err = cudaMalloc(&ptr, size);
-            }
-            else if constexpr (memory_type == cuda_memory_type::host) {
-                err = cudaMallocHost(&ptr, size);
-            }
-            else if constexpr (memory_type == cuda_memory_type::managed) {
-                err = cudaMallocManaged(&ptr, size);
-            }
-            if (err != cudaSuccess) {
-                std::cerr << "cuda allocate error." << std::string(cudaGetErrorString(err)) << std::endl;
-                throw std::bad_alloc();
-            }
-            return static_cast<pointer>(ptr);
+        cudaError_t err = cudaSuccess;
+        if constexpr (memory_type == cuda_memory_type::device) {
+            err = cudaMalloc(&ptr, size);
         }
-        ptr = base_type::allocate(n);
+        else if constexpr (memory_type == cuda_memory_type::pinned) {
+            err = cudaMallocHost(&ptr, size);
+        }
+        else if constexpr (memory_type == cuda_memory_type::managed) {
+            err = cudaMallocManaged(&ptr, size);
+        }
+        else if constexpr (memory_type == cuda_memory_type::pageable){
+            ptr = base_type::allocate(n);
+        }
+        if (err != cudaSuccess) {
+            std::cerr << "cuda allocate error." << std::string(cudaGetErrorString(err)) << std::endl;
+            throw std::bad_alloc();
+        }
         return static_cast<pointer>(ptr);
     }
     void deallocate(pointer p, std::size_t n) {
         if (p == nullptr) return;
-        if (n * sizeof(T) >= minimal_size)
-        {
-            cudaError_t err = cudaSuccess;
-            if constexpr (memory_type == cuda_memory_type::device) {
-                err = cudaFree(p);
-            }
-            else if constexpr (memory_type == cuda_memory_type::host) {
-                err = cudaFreeHost(p);
-            }
-            else if constexpr (memory_type == cuda_memory_type::managed) {
-                err = cudaFree(p);
-            }
-            if (err != cudaSuccess) {
-                std::cerr << "cuda deallocate error. " << std::string(cudaGetErrorString(err)) << std::endl;
-                throw std::runtime_error("cuda dellocate error");
-            }
-            return;
+        cudaError_t err = cudaSuccess;
+        if constexpr (memory_type == cuda_memory_type::device) {
+            err = cudaFree(p);
         }
-        base_type::deallocate(p, n);
+        else if constexpr (memory_type == cuda_memory_type::pinned) {
+            err = cudaFreeHost(p);
+        }
+        else if constexpr (memory_type == cuda_memory_type::managed) {
+            err = cudaFree(p);
+        }
+        else if constexpr (memory_type == cuda_memory_type::pageable){
+            base_type::deallocate(p, n);
+        }
+        if (err != cudaSuccess) {
+            std::cerr << "cuda deallocate error. " << std::string(cudaGetErrorString(err)) << std::endl;
+            throw std::runtime_error("cuda dellocate error");
+        }
     }
 };
-template<class T> using cuda_vector_device = std::vector<T, cuda_allocator<T, cuda_memory_type::device, 1024>>;
-template<class T> using cuda_vector_host = std::vector<T, cuda_allocator<T, cuda_memory_type::host, 1024>>;
-template<class T> using cuda_vector_managed = std::vector<T, cuda_allocator<T, cuda_memory_type::managed, 1024>>;
+template<class T> using cuda_vector_device = std::vector<T, cuda_allocator<T, cuda_memory_type::device>>;
+template<class T> using cuda_vector_host = std::vector<T, cuda_allocator<T, cuda_memory_type::pinned>>;
+template<class T> using cuda_vector_managed = std::vector<T, cuda_allocator<T, cuda_memory_type::managed>>;
+template<class T> using cuda_vector_pageable = std::vector<T>;
 
+int cal_grid_size(int numElements,int threadsPerBlock = 1024)
+{
+    return (numElements + threadsPerBlock - 1) / threadsPerBlock;
+}
+int aligin_count(int len, int aligin){
+    return (len + aligin - 1) / aligin;
+}
