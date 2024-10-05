@@ -1,56 +1,66 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.colors import Normalize
 
-frame_index = 0
+
+# Global variables to hold state
 im = None
 ax = None
+cb = None
+frame_index = 0
 
 def try_init(data):
-    global im
-    global ax
-    if None != ax: return
+    global im, ax, cb
+    if ax is not None:
+        return
     plt.ion()
     ax = plt.gca()
     shape = data.shape
-    # 如果是1D数据，将其扩展为2D形式进行显示
     if len(shape) == 1:
         [im,] = ax.plot(range(shape[0]), data)
         ax.set_ylim([np.min(data), np.max(data)])
-        # im = ax.imshow(np.zeros((shape[0], 1)), aspect='auto', cmap='hot')
     else:
-        im, = ax.imshow(data, aspect='auto', cmap='hot')
+        norm = Normalize(vmin=np.min(data), vmax=np.max(data))
+        im = ax.imshow(data, aspect='auto', cmap='viridis', norm = norm)
         ax.xaxis.set_ticks_position('bottom')
         ax.invert_yaxis()
-        plt.colorbar(im)
+        cb = plt.colorbar(im, ax=ax)
+        cb.set_label('Intensity')  # 设置 colorbar 标签
 
-def normization(data):
-    min_data = np.min(data)
-    max_data = np.max(data)
-    normalized_data = ((data - min_data) / (max_data - min_data))
-    return normalized_data 
-def update(data):
-    global frame_index
-    [xsize, ysize] = data.shape 
-    
-    print("frame-%d:\n    min:%f\n    max:%f\n    sum:%f\n" % (
-            frame_index,
-            np.min(np.min(data)),
-            np.max(data),
-            np.sum(data)
-        )
-    )
-    # 更新图像数据
-    data = data[xsize//2]
-    ysize  = 1
+update_count = 0
+def update(data, sync_mode=False):
+    global frame_index, update_count
+    update_count = update_count + 1
+    # if update_count % 10 != 0: return
+    [xsize, ysize] = data.shape
+    lb, ub = np.min(data), np.max(data)
+    print(f"frame-{frame_index}:\n    min:{lb}\n    max:{ub}\n    sum:{np.sum(data)}\n")
+    frame_index = frame_index + 1
+    # Update the image data (use a 1D slice of the matrix for simplicity)
+    # data = data[xsize // 2]
+    # ysize = 1
     
     try_init(data)
-    # 如果是1D数据，调整显示格式
-    if ysize == 1:
+    
+    if ysize == 1: 
         im.set_ydata(data)
-        # im.set_array(data.reshape(1, -1))  # 确保是2D形状
     else:
+        # data = (data - lb)/(ub -lb)
         im.set_array(data)
-        
+    
+    # im.norm = Normalize(vmin=lb, vmax=ub)
+    # cb.update_normal(im) 
     plt.draw()
-    plt.pause(0.1)  # 暂停一点时间以刷新显示
-    frame_index += 1
+    
+    if sync_mode:
+        plt.ioff()
+        plt.show(block=True)
+    else:
+        plt.pause(0.1)
+
+# Function to clean up and close the plot
+def close_plot():
+    plt.close()
+
+def regist_on_close(callback_on_close):
+    cid = ax.figure.canvas.mpl_connect('close_event', callback_on_close)
