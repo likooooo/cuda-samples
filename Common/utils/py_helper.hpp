@@ -148,7 +148,8 @@ void init_stl_converters() {
 }
 
 template<class T, class TAlloc> inline 
-np::ndarray create_ndarray_from_vector(const std::vector<T, TAlloc>& data, const std::vector<int>& shape) {
+np::ndarray create_ndarray_from_vector(const std::vector<T, TAlloc>& data, std::vector<int> shape) {
+    std::reverse(shape.begin(), shape.end());
     std::vector<int> strides(shape.size());
     strides.back() = sizeof(T);
     for (int i = shape.size() - 2; i >= 0; --i) {
@@ -184,7 +185,7 @@ struct py_plot {
     static auto create_callback_simulation_fram_done() {
         static auto callback_fram_display = [plot = py_plot()](np::ndarray data) mutable {
             if (get_cancel_token()) return false;
-            plot.visulizer["update"](data);
+            catch_py_error(plot.visulizer["update"](data));
             if (!plot.event_init) {
                 catch_py_error(plot.visulizer["regist_on_close"](py_plot::on_plot_close));
                 plot.event_init = true;

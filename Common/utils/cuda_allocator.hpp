@@ -6,6 +6,7 @@
 #include <vector>
 #include <type_traits>
 #include <string>
+#include <numeric>
 // 1D
 // pinned -> device   : cudaMemcpyAsync : cudaMemcpyHostToDevice
 // device -> pinned   : cudaMemcpyAsync : cudaMemcpyDeviceToHost //cudaDeviceSynchronize
@@ -94,6 +95,7 @@ public:
         }
     }
 };
+template<class T, cuda_memory_type N>  using cuda_vector = std::vector<T, cuda_allocator<T, N>>;
 template<class T> using cuda_vector_device = std::vector<T, cuda_allocator<T, cuda_memory_type::device>>;
 template<class T> using cuda_vector_host = std::vector<T, cuda_allocator<T, cuda_memory_type::pinned>>;
 template<class T> using cuda_vector_managed = std::vector<T, cuda_allocator<T, cuda_memory_type::managed>>;
@@ -105,4 +107,16 @@ int cal_grid_size(int numElements,int threadsPerBlock = 1024)
 }
 int aligin_count(int len, int aligin){
     return (len + aligin - 1) / aligin;
+}
+
+// TODO :  make_inplace_fft_vec, make_vec(fftw_allocator.hpp)
+template<class TAlloc, class TDim, class ...TDims> auto make_inplace_fft_vec(TDim d0, TDims ...rest)
+{
+    using T = typename TAlloc::value_type;
+    using vec = std::vector<T, TAlloc>;
+    std::array<TDim, sizeof...(rest) + 1> n{ d0, rest... };
+    auto prod = std::accumulate(n.begin(), n.end() - 1, (size_t)1, [](auto a, auto b) {return a * b; });
+    auto withpadding = (std::is_floating_point_v<T> ? (n.back() / 2 + 1) * 2 : n.back());
+    vec v; v.reserve(prod * withpadding);
+    return v;
 }

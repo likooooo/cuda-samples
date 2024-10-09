@@ -11,21 +11,6 @@ void test_allocation_and_deallocation() {
     cuda_vector_device<int>().reserve(1024);
     std::cout << "test allocation & deallocation success" << std::endl;
 }
-//namespace std::cuda
-//{
-//    template<class T, bool with_padding = true> __global__ void iota(T* pBegin, T* pEnd, const T begin) {
-//        int i = blockDim.x * blockIdx.x + threadIdx.x;
-//        if constexpr (!with_padding) { if (i >= (std::distance(pBegin, pEnd)) return; }
-//        pBegin[i] = begin + i;
-//    }
-//
-//    template<class T, bool with_padding = true> __global__ void vector_add(const T* A, const T* B, T* C, int numElements) {
-//        int i = blockDim.x * blockIdx.x + threadIdx.x;
-//        if constexpr (!with_padding) { if (i >= numElements) return; }
-//        C[i] = A[i] + B[i] + 0.0f;
-//    }
-//}
-
 
 void test_memcpy() {
     cuda_vector_device<int> cuda_vec_device;
