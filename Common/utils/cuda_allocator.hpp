@@ -120,3 +120,19 @@ template<class TAlloc, class TDim, class ...TDims> auto make_inplace_fft_vec(TDi
     vec v; v.reserve(prod * withpadding);
     return v;
 }
+
+template<class T, class TAlloc> resize(std::vector<T, TAlloc>& vec, int n) {
+   if constexpr (std::is_cuda_alloc<TAlloc>) {
+       using TVec = std::array<T*, 3>;
+       static_assert(sizeof(TVec) == sizeof(vec));
+       static_assert(std::is_trivial<T>::value); // destructs is forbidden
+       TVec& v = reinterpret_cast<TVec&>(vec);
+       if (n > vec.capacity()) {
+           vec.reserve(n);
+       }
+       vec[1] = vec[0] + n;
+   }
+   else {
+       vec.resize(n);
+   }
+}

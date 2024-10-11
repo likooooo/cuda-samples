@@ -1,10 +1,8 @@
 #include <cuda_runtime.h>
-#include <iostream>
 #include <cmath>
 #include <memory>
 #include <cmath>
 #include <map>
-#include <iostream>
 #include <functional>
 #include "py_helper.hpp"
 #include "kernels.hpp"
@@ -134,8 +132,6 @@ void solve_diffusion_with_green_function(real dt, real simulate_time, real Lx, r
 
 int main() {
     py_loader::init();
-    init_stl_converters<std::vector<int>>();
-
     struct diffusion_input_params {
         const real D = 1;     // 扩散系数
         const real dx = 0.01;   // 空间步长

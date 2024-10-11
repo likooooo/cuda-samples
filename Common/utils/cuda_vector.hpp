@@ -2,6 +2,7 @@
 #include <cublas_v2.h>
 #include <cufft.h>
 #include "cuda_allocator.hpp"
+#include "common.h"
 
 #define check_cuda_error() do { \
     cudaError_t err = cudaGetLastError(); \

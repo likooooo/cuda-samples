@@ -46,6 +46,41 @@ struct pyobject_wrapper : public py::object {
     explicit pyobject_wrapper(const py::object& obj) :py::object(obj){}
     inline pyobject_wrapper operator [](const char* key) const { return pyobject_wrapper(py::object::attr(key)); }
 };
+
+template<class TContainer> struct stl_container_converter {
+    static PyObject* convert(const TContainer& vec) {
+        py::list list;
+        for (const auto& elem : vec) list.append(elem);
+        return py::incref(list.ptr());
+    }
+    static void* convert_from_python(PyObject* obj) {
+        void* p = std::malloc(sizeof(TContainer));
+        TContainer& vec = *(new (p)TContainer());
+        if (PyList_Check(obj) || PyTuple_Check(obj)) {
+            py::handle<> handle(py::borrowed(obj));
+            py::list list(handle);
+            int n = len(list);
+            vec.resize(n);// TODO : resize if T is vector
+            for (int i = 0; i < n; i++) vec[i] = py::extract<typename TContainer::value_type>(list[i]);
+        }
+        return p;
+    }
+    static void register_converter() {
+        py::to_python_converter<TContainer, stl_container_converter<TContainer>>();
+        py::converter::registry::insert(
+            &convert_from_python,
+            py::type_id<TContainer>()
+        );
+    }
+};
+template<class T, class ...TRest> inline
+void init_stl_converters() {
+    stl_container_converter<T>::register_converter();
+    if constexpr (sizeof...(TRest)) {
+        init_stl_converters<TRest...>();
+    }
+}
+
 struct py_loader final
 {
     using module_map = std::map<std::string, pyobject_wrapper>;
@@ -107,45 +142,12 @@ public:
     static void init(){
         if(get_py_inter().is_py_running) return;
         get_py_inter() = py_lifetime(true);
+        init_stl_converters<std::vector<int>>();
     }
     static void dispose(){
         get_py_inter() = py_lifetime(false);
     }
 };
-
-template<class TContainer> struct stl_container_converter {
-    static PyObject* convert(const TContainer& vec) {
-        py::list list;
-        for (const auto& elem : vec) list.append(elem);
-        return py::incref(list.ptr());
-    }
-    static void* convert_from_python(PyObject* obj) {
-        void* p = std::malloc(sizeof(TContainer));
-        TContainer& vec = *(new (p)TContainer());
-        if (PyList_Check(obj) || PyTuple_Check(obj)) {
-            py::handle<> handle(py::borrowed(obj));
-            py::list list(handle);
-            int n = len(list);
-            vec.resize(n);// TODO : resize if T is vector
-            for (int i = 0; i < n; i++) vec[i] = py::extract<typename TContainer::value_type>(list[i]);
-        }
-        return p;
-    }
-    static void register_converter() {
-        py::to_python_converter<TContainer, stl_container_converter<TContainer>>();
-        py::converter::registry::insert(
-            &convert_from_python,
-            py::type_id<TContainer>()
-        );
-    }
-};
-template<class T, class ...TRest> inline 
-void init_stl_converters() {
-    stl_container_converter<T>::register_converter();
-    if constexpr (sizeof...(TRest)) {
-        init_stl_converters<TRest...>();
-    }
-}
 
 template<class T, class TAlloc> inline 
 np::ndarray create_ndarray_from_vector(const std::vector<T, TAlloc>& data, std::vector<int> shape) {
@@ -170,6 +172,7 @@ struct py_plot {
     py_loader loader;
     pyobject_wrapper visulizer;
     bool event_init = false;
+    //std::function<void(double, double, double, double)>
     py_plot() : loader(PY_SOURCE_DIR) {
         visulizer = loader["visualizer"];
     }
@@ -182,12 +185,16 @@ struct py_plot {
         get_cancel_token() = true;
         return false;
     }
-    static auto create_callback_simulation_fram_done() {
-        static auto callback_fram_display = [plot = py_plot()](np::ndarray data) mutable {
+    static auto create_callback_simulation_fram_done(
+        py::object callback_click = py::object(),
+        py::object callback_motion = py::object()
+    ) {
+        auto callback_fram_display = [plot = py_plot(), callback_click, callback_motion](np::ndarray data) mutable {
             if (get_cancel_token()) return false;
             catch_py_error(plot.visulizer["update"](data));
             if (!plot.event_init) {
                 catch_py_error(plot.visulizer["regist_on_close"](py_plot::on_plot_close));
+                catch_py_error(auto func = plot.visulizer["regist_click_and_motion"](callback_click, callback_motion));
                 plot.event_init = true;
             }
             return !get_cancel_token();
@@ -195,3 +202,8 @@ struct py_plot {
         return callback_fram_display;
     }
 };
+
+inline void overload_click(int type, int flag, float dx, float dy) {
+    const std::array<const char*, 4> btn_type{ "", "left", "mid", "right" };
+    printf("%s  %s button at (%f, %f)\n", 0 == flag ? "press" : "release", btn_type.at(type), dx, dy);
+}

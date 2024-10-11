@@ -10,7 +10,7 @@ else()
     message(FATAL_ERROR "CUDA not found")
 endif()
 set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -arch=sm_70")
-
+set(ROOT_DIR ${CMAKE_CURRENT_LIST_DIR})
 include_directories(${CMAKE_CURRENT_LIST_DIR}/Common)
 include_directories(${CMAKE_CURRENT_LIST_DIR}/Common/utils)
 
